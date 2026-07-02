@@ -1,0 +1,52 @@
+name: dbt Daily Run
+
+on:
+  schedule:
+    - cron: '0 6 * * *'    # 6 AM UTC every day
+  workflow_dispatch:          # Manual trigger from GitHub UI
+
+jobs:
+  dbt-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dbt-databricks
+        run: pip install dbt-databricks
+
+      - name: Create profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'EOF'
+          nyc_taxi_dbt:
+            target: prod
+            outputs:
+              prod:
+                type: databricks
+                host: ${{ secrets.DATABRICKS_HOST }}
+                http_path: ${{ secrets.DATABRICKS_HTTP_PATH }}
+                token: ${{ secrets.DATABRICKS_TOKEN }}
+                catalog: nyc_taxi
+                schema: prod
+                threads: 4
+          EOF
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: Check source freshness
+        run: dbt source freshness
+        continue-on-error: true   # Don't block the run if source is stale
+
+      - name: Run dbt models
+        run: dbt run --target prod
+
+      - name: Run dbt tests
+        run: dbt test --target prod
