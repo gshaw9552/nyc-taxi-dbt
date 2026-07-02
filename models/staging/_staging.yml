@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: stg_nyc_taxi__yellow_trips
+    description: >
+      Cleaned and renamed yellow taxi trip records.
+      One row per trip. Filters out rows with null timestamps,
+      zero trip distance, or zero total fare.
+    columns:
+      - name: pickup_at
+        description: "Trip pickup timestamp (UTC)"
+        tests:
+          - not_null
+      - name: dropoff_at
+        description: "Trip dropoff timestamp (UTC)"
+        tests:
+          - not_null
+      - name: trip_distance
+        description: "Trip distance in miles"
+        tests:
+          - not_null
+      - name: pickup_location_id
+        description: "Pickup location ID (foreign key to stg_taxi_zones)"
+        tests:
+          - not_null
+      - name: payment_type
+        description: "Payment method code"
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6]
+      - name: total_amount
+        description: "Total amount charged in USD"
+        tests:
+          - not_null
+      
+
+  - name: stg_taxi_zones
+    description: "Reference table mapping location IDs to borough and zone names"
+    columns:
+      - name: location_id
+        description: "Unique location identifier"
+        tests:
+          - unique
+          - not_null
+      - name: borough
+        description: "NYC borough name"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Manhattan', 'Queens', 'Brooklyn', 'Bronx', 'Staten Island', 'EWR', 'N/A', 'Unknown']

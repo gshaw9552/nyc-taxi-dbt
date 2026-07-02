@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: int_trips__enriched
+    description: >
+      Trips joined with pickup and dropoff zone names.
+      Adds trip duration and tip percentage calculations.
+      Filtered to remove extreme outliers (duration > 300 min, distance > 100 miles).
+      Ephemeral model - compiles as a CTE inside downstream mart models,
+      no table is created in Databricks.

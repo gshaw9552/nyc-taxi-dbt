@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: fct_trips_daily
+    description: >
+      Daily trip aggregations by borough.
+      One row per calendar date per borough.
+      Primary table for daily operational reporting.
+    columns:
+      - name: trip_date
+        description: "Calendar date of the trip"
+        tests:
+          - not_null
+      - name: pickup_borough
+        description: "NYC borough where the trip started"
+        tests:
+          - not_null
+      - name: total_trips
+        description: "Total number of completed trips"
+        tests:
+          - not_null
+      - name: total_revenue_usd
+        description: "Sum of total_amount charged to passengers"
+
+  - name: fct_trips_hourly
+    description: >
+      Hourly trip aggregations by borough.
+      One row per calendar date, hour, and borough.
+      Used for demand pattern analysis.
+
+  - name: dim_taxi_zones
+    description: "Reference dimension for taxi zone and borough lookup"
+    columns:
+      - name: location_id
+        description: "Unique location identifier"
+        tests:
+          - unique
+          - not_null
