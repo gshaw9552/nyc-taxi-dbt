@@ -19,7 +19,9 @@ SELECT
     SUM(CASE WHEN payment_type = 1
              THEN 1 ELSE 0 END)                     AS credit_card_trips,
     SUM(CASE WHEN payment_type = 2
-             THEN 1 ELSE 0 END)                     AS cash_trips
+             THEN 1 ELSE 0 END)                     AS cash_trips,
+
+    {{ audit_columns() }}
 
 FROM {{ ref('int_trips__enriched') }}
 
