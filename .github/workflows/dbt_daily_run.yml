@@ -1,8 +1,6 @@
 name: dbt Daily Run
 
 on:
-  schedule:
-    - cron: '0 6 * * *'    # 6 AM UTC every day
   workflow_dispatch:          # Manual trigger from GitHub UI
 
 jobs:
