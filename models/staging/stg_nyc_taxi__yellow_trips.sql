@@ -27,10 +27,12 @@ cleaned AS (
 
     -- Remove clearly invalid rows
     WHERE tpep_pickup_datetime IS NOT NULL
-      AND tpep_dropoff_datetime IS NOT NULL
-      AND tpep_pickup_datetime < tpep_dropoff_datetime
-      AND trip_distance > 0
-      AND total_amount > 0
+        AND tpep_dropoff_datetime IS NOT NULL
+        AND tpep_pickup_datetime < tpep_dropoff_datetime
+        AND trip_distance > 0
+        AND total_amount > 0
+        AND tpep_pickup_datetime >= '2026-04-01'
+        AND tpep_pickup_datetime < '2026-05-01'
 )
 
 SELECT * FROM cleaned
