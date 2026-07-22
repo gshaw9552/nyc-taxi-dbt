@@ -31,8 +31,8 @@ cleaned AS (
         AND tpep_pickup_datetime < tpep_dropoff_datetime
         AND trip_distance > 0
         AND total_amount > 0
-        AND tpep_pickup_datetime >= '2026-04-01'
-        AND tpep_pickup_datetime < '2026-05-01'
+        AND tpep_pickup_datetime >= '2020-01-01'
+        AND tpep_pickup_datetime <= CURRENT_DATE()
 )
 
 SELECT * FROM cleaned
