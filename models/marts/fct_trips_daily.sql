@@ -25,12 +25,7 @@ SELECT
 
 FROM {{ ref('int_trips__enriched') }}
 
-{% if is_incremental() %}
-WHERE trip_date >= (
-    SELECT DATE_ADD(MAX(trip_date), -3)
-    FROM {{ this }}
-)
-{% endif %}
+{{ apply_incremental_watermark() }}
 
 GROUP BY
     trip_date,

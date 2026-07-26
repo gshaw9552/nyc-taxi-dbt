@@ -1,0 +1,39 @@
+version: 2
+
+snapshots:
+  - name: zones_snapshot
+    description: >
+      SCD Type 2 history of taxi zone attributes. One row per zone per
+      distinct version of its attributes over time. Never overwritten,
+      never deleted — dbt_valid_to marks when a version was superseded.
+    columns:
+      - name: location_id
+        description: "Business key — the zone's stable identifier"
+        tests:
+          - not_null
+      - name: dbt_valid_from
+        tests:
+          - not_null
+      - name: dbt_valid_to
+        description: "NULL means this is the current version of the zone"
+
+models:
+  - name: dim_taxi_zones
+    description: >
+      Current-state view of taxi zones, derived from zones_snapshot.
+      Exactly one row per location_id — always reflects the latest
+      known attributes. Join fact tables against this, not the snapshot,
+      unless doing explicit point-in-time historical analysis.
+    columns:
+      - name: location_id
+        description: "Unique zone identifier"
+        tests:
+          - unique
+          - not_null
+      - name: zone_name
+        tests:
+          - not_null
+      - name: effective_from
+        description: "When this version of the zone's attributes became current"
+        tests:
+          - not_null

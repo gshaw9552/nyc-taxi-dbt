@@ -1,0 +1,41 @@
+name: Trigger dbt Job on Push
+
+# This workflow does NOT run dbt. It only tells Databricks to run the
+# already-configured Job, which pulls the latest code from this repo's
+# main branch itself (Job source = Git provider) and executes dbt build.
+#
+# Why split it this way:
+#   - GitHub Actions needs no warehouse credentials, no dbt install,
+#     no dependency management. It is a one-call webhook.
+#   - Databricks Workflows owns the actual execution, retries, cluster/
+#     warehouse selection, and Git-pull-at-run-time — which is what it's
+#     designed for.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:   # allows a manual "Run workflow" click as a fallback
+
+jobs:
+  trigger-databricks-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Databricks Job run
+        run: |
+          curl -X POST \
+            "https://${{ secrets.DATABRICKS_HOST }}/api/2.1/jobs/run-now" \
+            -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+                  "job_id": ${{ secrets.DATABRICKS_JOB_ID }},
+                  "notebook_params": {
+                    "triggered_by": "github_push",
+                    "commit_sha": "${{ github.sha }}"
+                  }
+                }' \
+            --fail --silent --show-error
+
+      - name: Confirm trigger sent
+        run: echo "Databricks Job ${{ secrets.DATABRICKS_JOB_ID }} triggered for commit ${{ github.sha }}"

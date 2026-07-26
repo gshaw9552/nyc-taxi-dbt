@@ -13,8 +13,85 @@ analysis-paths: ["analyses"]
 target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 
+# ─────────────────────────────────────────────────────────────────────────
+# ADD THIS INTO YOUR EXISTING dbt_project.yml, under the top-level `vars:`
+# key. If you already have a `vars:` block (you do — it currently has
+# project_name), ADD staging_configs alongside it, don't replace the block.
+# ─────────────────────────────────────────────────────────────────────────
+#
+# Your dbt_project.yml should end up with a vars section that looks like:
+#
+# vars:
+#   project_name: 'nyc_taxi'
+#   staging_configs:
+#     <everything below>
+
 vars:
   project_name: 'nyc_taxi'
+
+  staging_configs:
+
+    yellow_trips_raw:
+      source_name: raw
+      rename:
+        VendorID: vendor_id
+        tpep_pickup_datetime: pickup_at
+        tpep_dropoff_datetime: dropoff_at
+        PULocationID: pickup_location_id
+        DOLocationID: dropoff_location_id
+      passthrough:
+        - passenger_count
+        - trip_distance
+        - payment_type
+        - fare_amount
+        - tip_amount
+        - tolls_amount
+        - total_amount
+      derived_columns:
+        trip_date: "CAST(tpep_pickup_datetime AS DATE)"
+        pickup_hour: "HOUR(tpep_pickup_datetime)"
+        day_of_week: "DAYOFWEEK(tpep_pickup_datetime)"
+      filters:
+        - "tpep_pickup_datetime IS NOT NULL"
+        - "tpep_dropoff_datetime IS NOT NULL"
+        - "tpep_pickup_datetime < tpep_dropoff_datetime"
+        - "trip_distance > 0"
+        - "total_amount > 0"
+        - "tpep_pickup_datetime >= '2020-01-01'"
+        - "tpep_pickup_datetime <= CURRENT_DATE()"
+
+    taxi_zone_lookup:
+      source_name: raw
+      rename:
+        LocationID: location_id
+        Borough: borough
+        Zone: zone_name
+      passthrough:
+        - service_zone
+      # No derived_columns, no filters needed for this reference table.
+      # _rescued_data (auto-added by read_files()) is deliberately excluded
+      # by not listing it in rename or passthrough — same behavior as the
+      # original hand-written model, just declared instead of implied.
+
+      incremental_configs:
+ 
+    fct_trips_daily:
+      watermark_column: trip_date
+      late_arrival_days: 3
+      # These two values are IDENTICAL to what was previously hardcoded in
+      # fct_trips_daily.sql. This config change should produce byte-identical
+      # incremental behavior — validate that before trusting it for a second
+      # incremental model with different tuning needs.
+ 
+    fct_trips_hourly:
+      watermark_column: trip_date
+      late_arrival_days: 3
+      # fct_trips_hourly is currently materialized as `table`, not
+      # `incremental` — this entry is here ready for when/if you convert it,
+      # so the config exists before the model needs it, not scrambled together
+      # at conversion time.
+
+  
 
 models:
   nyc_taxi_dbt:
@@ -26,3 +103,8 @@ models:
     marts:
       +materialized: table
       +schema: marts
+
+snapshots:
+  nyc_taxi_dbt:
+    +schema: snapshots
+ 

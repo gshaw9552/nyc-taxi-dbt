@@ -27,12 +27,3 @@ models:
       Hourly trip aggregations by borough.
       One row per calendar date, hour, and borough.
       Used for demand pattern analysis.
-
-  - name: dim_taxi_zones
-    description: "Reference dimension for taxi zone and borough lookup"
-    columns:
-      - name: location_id
-        description: "Unique location identifier"
-        tests:
-          - unique
-          - not_null
