@@ -73,8 +73,8 @@ vars:
       # by not listing it in rename or passthrough — same behavior as the
       # original hand-written model, just declared instead of implied.
 
-      incremental_configs:
- 
+  incremental_configs:
+
     fct_trips_daily:
       watermark_column: trip_date
       late_arrival_days: 3
@@ -82,7 +82,7 @@ vars:
       # fct_trips_daily.sql. This config change should produce byte-identical
       # incremental behavior — validate that before trusting it for a second
       # incremental model with different tuning needs.
- 
+
     fct_trips_hourly:
       watermark_column: trip_date
       late_arrival_days: 3
@@ -90,8 +90,6 @@ vars:
       # `incremental` — this entry is here ready for when/if you convert it,
       # so the config exists before the model needs it, not scrambled together
       # at conversion time.
-
-  
 
 models:
   nyc_taxi_dbt:
@@ -107,4 +105,3 @@ models:
 snapshots:
   nyc_taxi_dbt:
     +schema: snapshots
- 
