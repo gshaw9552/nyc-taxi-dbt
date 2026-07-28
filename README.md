@@ -1,36 +1,178 @@
 # nyc-taxi-dbt
 
-A production-quality dbt pipeline on Databricks Free Edition using NYC Taxi
-Trip data. Structured as a reusable template for warehouse-only data engineering.
+A production-quality dbt framework on Databricks Free Edition, built around the NYC Taxi dataset as a working example.
+
+This repository has evolved from a single taxi analytics project into a reusable dbt template with:
+- config-driven staging generation
+- incremental watermark loading
+- SCD Type 2 snapshots
+- automated ingestion on Databricks
+- GitHub-triggered Databricks execution
+- backfill and validation playbooks
+- a documented path for adding new sources
 
 ## What This Project Does
 
-Transforms raw NYC Taxi Trip records through three quality layers:
+This project transforms raw NYC Taxi Trip records through a production-style warehouse pipeline:
 
-- **Staging**: Cleans, renames, and validates raw source data (views, zero storage cost)
-- **Intermediate**: Enriches trips with zone names and calculated metrics (ephemeral CTEs, zero storage cost)
-- **Marts**: Daily and hourly aggregations ready for reporting (incremental Delta tables)
+- **Bronze / Raw**: Parquet files land in a Databricks Volume and are loaded into Delta with `COPY INTO`
+- **Staging**: Source-specific configs generate clean, renamed, validated views
+- **Intermediate**: Reusable enrichment logic combines trips with zone data and derived metrics
+- **Marts**: Incremental fact tables, dimensions, and reporting-ready aggregations
+- **Snapshots**: SCD Type 2 history is retained for slowly changing dimensions
 
-## Prerequisites
+The current implementation includes:
+- Databricks SQL Warehouse
+- dbt Core
+- source freshness checks
+- reusable macros
+- incremental merge logic
+- audit columns
+- SCD framework
+- automated ingestion
+- Databricks Job trigger from GitHub
+- validation and backfill docs
 
-- Python 3.8+
-- Databricks workspace (Free Edition works)
-- SQL Warehouse created in Databricks (2X-Small, auto-stop 10 min recommended)
-- NYC Taxi raw data loaded into `nyc_taxi.raw.yellow_trips_raw`
-- Taxi zone lookup loaded into `nyc_taxi.raw.taxi_zone_lookup`
+## Repository Features
 
-See `docs/architecture.md` for the full pipeline diagram and design decisions.
+### Generic staging generation
+Staging models use a generator macro:
+- `generate_staging_select()`
+- configured through `vars.staging_configs` in `dbt_project.yml`
 
-## Setup
+That means staging logic is centralised in YAML instead of repeated across many SQL files.
 
-### 1. Clone the repo
+### Incremental loading
+Incremental marts use:
+- `apply_incremental_watermark()`
+- configurable watermark columns
+- configurable late-arrival windows
+- merge strategy on Delta
+
+This is designed for forward-moving data with a small reprocessing window.
+
+### SCD support
+The repository includes a working SCD Type 2 example for taxi zones:
+- `snapshots/zones_snapshot.sql`
+- `models/marts/dimensions/dim_taxi_zones.sql`
+
+### Automated ingestion
+The ingestion layer is separated from dbt:
+- `ingestion/ingest_yellow_trips.sql`
+- loaded via a Databricks Job task
+- triggered by GitHub push through `.github/workflows/trigger_databricks_job.yml`
+
+### Operational docs
+The repo also includes:
+- `docs/automated_ingestion_setup.md`
+- `docs/backfill_playbook.md`
+- `docs/scd_framework_guide.md`
+- `docs/validation_notes.md`
+- `docs/worked_example_new_source.md`
+
+## Tech Stack
+
+- **Databricks SQL Warehouse**
+- **dbt Core**
+- **Delta Lake**
+- **GitHub Actions**
+- **Databricks Jobs**
+- **YAML-driven configuration**
+- **dbt-utils**
+
+## Project Structure
+
+```text
+nyc_taxi_dbt/
+├── dbt_project.yml
+├── packages.yml
+├── package-lock.yml
+├── README.md
+│
+├── ingestion/
+│   └── ingest_yellow_trips.sql
+│
+├── macros/
+│   ├── audit_columns.sql
+│   ├── apply_incremental_watermark.sql
+│   ├── generate_schema_name.sql
+│   └── generate_staging_select.sql
+│
+├── models/
+│   ├── staging/
+│   │   ├── _sources.yml
+│   │   ├── _staging.yml
+│   │   ├── stg_nyc_taxi__yellow_trips.sql
+│   │   └── stg_taxi_zones.sql
+│   │
+│   ├── intermediate/
+│   │   ├── _intermediate.yml
+│   │   └── int_trips__enriched.sql
+│   │
+│   └── marts/
+│       ├── _marts.yml
+│       ├── fct_trips_daily.sql
+│       ├── fct_trips_hourly.sql
+│       └── dimensions/
+│           ├── _dimensions.yml
+│           └── dim_taxi_zones.sql
+│
+├── snapshots/
+│   └── zones_snapshot.sql
+│
+├── tests/
+│   ├── assert_no_future_trips.sql
+│   └── assert_fct_trips_daily_unique_key.sql
+│
+├── docs/
+│   ├── architecture.md
+│   ├── automated_ingestion_setup.md
+│   ├── backfill_playbook.md
+│   ├── profile_template.yml
+│   ├── scd_framework_guide.md
+│   ├── validation_notes.md
+│   └── worked_example_new_source.md
+│
+└── .github/
+    └── workflows/
+        └── trigger_databricks_job.yml
+
+## Architecture Overview
+
+```text
+NYC TLC public Parquet files
+        ↓
+Databricks Volume
+        ↓
+COPY INTO raw Delta table
+        ↓
+dbt staging views
+        ↓
+dbt intermediate enrichment
+        ↓
+dbt marts + snapshots
+        ↓
+BI / reporting / downstream consumption
+```
+
+The design keeps ingestion separate from transformation:
+
+- **Ingestion** is handled by Databricks SQL
+- **Transformation** is handled by dbt
+- **Orchestration** is handled by GitHub Actions and Databricks Jobs
+
+---
+
+# Setup
+
+## 1. Clone the repository
 
 ```bash
 git clone https://github.com/YOURUSERNAME/nyc-taxi-dbt.git
 cd nyc-taxi-dbt
 ```
 
-### 2. Create a virtual environment
+## 2. Create a virtual environment
 
 ```bash
 python3 -m venv dbt-env
@@ -38,7 +180,7 @@ source dbt-env/bin/activate
 pip install dbt-databricks
 ```
 
-### 3. Set environment variables
+## 3. Configure environment variables
 
 ```bash
 export DATABRICKS_HOST=your-workspace.azuredatabricks.net
@@ -46,151 +188,301 @@ export DATABRICKS_TOKEN=your-personal-access-token
 export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/your-warehouse-id
 ```
 
-Add these three lines to `~/.zshrc` or `~/.bashrc` so they persist across terminal sessions.
+You can add these variables to `~/.zshrc` or `~/.bashrc` so they persist across terminal sessions.
 
-### 4. Configure your dbt profile
+## 4. Configure your dbt profile
 
-Copy `docs/profiles_template.yml` to `~/.dbt/profiles.yml`.
-The file uses `env_var()` so no credentials are hardcoded.
+Copy the profile template:
 
 ```bash
-cp docs/profiles_template.yml ~/.dbt/profiles.yml
+cp docs/profile_template.yml ~/.dbt/profiles.yml
 ```
 
-### 5. Install packages and verify connection
+Then edit the file if required for your Databricks workspace.
+
+## 5. Install dependencies and verify connectivity
 
 ```bash
 dbt deps
 dbt debug
 ```
 
-`dbt debug` should end with: `All checks passed!`
+`dbt debug` should end with:
 
-## Running the Pipeline
+```text
+All checks passed!
+```
+
+---
+
+# Running the Pipeline
+
+### Run all models
 
 ```bash
-# Development run — writes to dev_staging and dev_marts schemas
 dbt run
+```
 
-# Run models then immediately test them
+### Run models followed by tests
+
+```bash
 dbt run && dbt test
+```
 
-# Production run — writes to prod_staging and prod_marts schemas
+### Run against the production target
+
+```bash
 dbt run --target prod
+```
 
-# Rebuild all tables from scratch (use after schema changes)
+### Full rebuild
+
+```bash
 dbt run --full-refresh
+```
 
-# Check whether source data is fresh
+### Source freshness
+
+```bash
 dbt source freshness
+```
 
-# Run tests only
+### Execute only tests
+
+```bash
 dbt test
+```
 
-# Run a single model
+### Run a single model
+
+```bash
 dbt run --select fct_trips_daily
+```
 
-# Run a model and everything downstream of it
+### Run a model and all downstream dependencies
+
+```bash
 dbt run --select fct_trips_daily+
 ```
 
-## Viewing Documentation and Lineage
+---
 
-```bash
-dbt docs generate
-dbt docs serve
+# Automated Execution
+
+The repository uses a GitHub Action to trigger a Databricks Job whenever code is pushed to the `main` branch.
+
+Workflow:
+
+- `.github/workflows/trigger_databricks_job.yml`
+- GitHub Action **does not execute dbt directly**
+- It calls the Databricks Jobs REST API
+- Databricks pulls the latest code from GitHub
+- The Databricks Job performs ingestion and executes the dbt pipeline
+
+This keeps orchestration lightweight while allowing Databricks to manage execution, retries, compute, and logging.
+
+---
+
+# Ingestion
+
+Raw NYC Taxi files are ingested using:
+
+- `ingestion/ingest_yellow_trips.sql`
+- `COPY INTO nyc_taxi.raw.yellow_trips_raw`
+- Files uploaded to:
+
+```text
+/Volumes/nyc_taxi/raw/landing/trips/
 ```
 
-Open http://localhost:8080 in your browser. Click any model to see its
-description and columns. Click the graph icon (bottom right of any model page)
-to view the full interactive lineage graph.
+### Important behaviour
 
-Press Ctrl+C in the terminal to stop the docs server when done.
+- `COPY INTO` is idempotent
+- Previously ingested files are automatically skipped
+- Historical backfills require a deliberate backfill strategy
+- Incremental marts assume data arrives in chronological order
 
-## Project Structure
+For ingestion setup and historical reloads, see:
 
+- `docs/automated_ingestion_setup.md`
+- `docs/backfill_playbook.md`
+
+---
+
+# Incremental Strategy
+
+The daily fact table uses an incremental merge strategy.
+
+## Current implementation
+
+- `fct_trips_daily` is materialized as `incremental`
+- Merge key: `trip_date + pickup_borough`
+- Incremental loading uses a configurable watermark column
+- Late-arriving records are handled through a configurable lookback window
+
+### Why this approach?
+
+Incremental loading avoids rebuilding the entire fact table while still reprocessing a configurable number of recent days.
+
+### Current limitation
+
+The current strategy assumes new files contain newer business dates.
+
+If historical files are uploaded after newer data already exists, those older records will **not** automatically appear in the incremental mart.
+
+For historical backfills, follow:
+
+- `docs/backfill_playbook.md`
+
+---
+
+# SCD Framework
+
+The project includes a working SCD Type 2 implementation.
+
+### Snapshot
+
+```text
+snapshots/zones_snapshot.sql
 ```
-nyc_taxi_dbt/
-├── dbt_project.yml                    # Master config: layer materializations and schemas
-├── packages.yml                       # dbt-utils package dependency
-├── README.md                          # This file
-│
-├── models/
-│   ├── staging/                       # One model per source table
-│   │   ├── _sources.yml               # Raw source declarations and freshness config
-│   │   ├── _staging.yml               # Staging model descriptions and tests
-│   │   ├── stg_nyc_taxi__yellow_trips.sql
-│   │   └── stg_taxi_zones.sql
-│   │
-│   ├── intermediate/                  # Joins and enrichment (ephemeral)
-│   │   ├── _intermediate.yml
-│   │   └── int_trips__enriched.sql
-│   │
-│   └── marts/                         # Business-ready aggregations
-│       ├── _marts.yml
-│       ├── fct_trips_daily.sql        # Incremental daily aggregation
-│       ├── fct_trips_hourly.sql       # Hourly aggregation
-│       └── dim_taxi_zones.sql         # Zone reference dimension
-│
-├── macros/
-│   ├── generate_schema_name.sql       # Dev/prod schema routing
-│   └── audit_columns.sql             # Adds _dbt_loaded_at, _dbt_run_id tracking
-│
-├── tests/                             # Custom singular data quality tests
-│   ├── assert_no_future_trips.sql
-│   └── assert_fct_trips_daily_unique_key.sql
-│
-├── docs/
-│   ├── architecture.md               # Pipeline diagram and design decisions
-│   └── profiles_template.yml         # Template for ~/.dbt/profiles.yml
-│
-└── .github/
-    └── workflows/
-        └── dbt_daily_run.yml         # GitHub Actions daily scheduler
+
+### Current Dimension
+
+```text
+models/marts/dimensions/dim_taxi_zones.sql
 ```
 
-## Scheduling
+The snapshot stores complete historical versions, while the dimension exposes only the latest active record for analytical queries.
 
-Daily runs are automated via GitHub Actions (`.github/workflows/dbt_daily_run.yml`).
+See:
 
-The workflow triggers at 6 AM UTC every day and:
-1. Checks source freshness (non-blocking — pipeline continues even if stale)
-2. Runs all dbt models against the prod target
-3. Runs all dbt tests against the prod target
+- `docs/scd_framework_guide.md`
 
-GitHub Actions free tier provides 2,000 minutes per month on private repos.
-This pipeline uses approximately 100-150 minutes per month.
+---
 
-To trigger a manual run: GitHub repo → Actions tab → dbt Daily Run → Run workflow.
+# Adding a New Source
 
-## Adapting This Template for a New Project
+The repository is designed to simplify onboarding of additional datasets.
 
-1. Update `models/staging/_sources.yml` with your new source tables in Databricks
-2. Create new `stg_` models in `models/staging/` — one per source table
-3. Update `models/intermediate/int_trips__enriched.sql` with your joins and business logic
-4. Update or replace mart models with your aggregations
-5. Update all YAML files with column descriptions and tests relevant to your data
-6. Update `dbt_project.yml` project name if desired
-7. Add new GitHub Secrets if using a different Databricks workspace
+### For sources similar to the existing NYC Taxi example
 
-Estimated time to adapt for a new dataset with a similar structure: 4-8 hours.
+1. Add the source definition to:
 
-## Cost Summary
+```text
+models/staging/_sources.yml
+```
+
+2. Add a configuration block under:
+
+```yaml
+vars:
+  staging_configs:
+```
+
+inside `dbt_project.yml`.
+
+3. Create a one-line staging model using:
+
+```jinja
+{{ generate_staging_select(...) }}
+```
+
+4. Add tests and documentation.
+
+### For sources with different transformation requirements
+
+Reuse the framework but implement a custom staging model where required.
+
+Additional documentation:
+
+- `docs/worked_example_new_source.md`
+- `docs/validation_notes.md`
+
+---
+
+# Data Quality
+
+The repository includes:
+
+- `not_null`
+- `unique`
+- `accepted_values`
+- Singular SQL tests
+- Source freshness checks
+
+Current custom tests include:
+
+- No future trips
+- Unique key validation for `fct_trips_daily`
+
+---
+
+# Documentation
+
+Additional project documentation:
+
+| Document | Description |
+|-----------|-------------|
+| `docs/architecture.md` | Overall architecture and pipeline design |
+| `docs/automated_ingestion_setup.md` | Automated ingestion setup |
+| `docs/backfill_playbook.md` | Historical reload and backfill process |
+| `docs/scd_framework_guide.md` | SCD Type 1 and Type 2 implementation |
+| `docs/validation_notes.md` | Validation approach and testing |
+| `docs/worked_example_new_source.md` | Example of onboarding a new dataset |
+| `docs/profile_template.yml` | Template dbt profile |
+
+---
+
+# Cost Summary
 
 | Component | Configuration | Cost |
-|---|---|---|
-| SQL Warehouse | 2X-Small, auto-stop 10 min | ~$0 on Free Edition |
-| Staging storage | Views (no physical storage) | $0 |
-| Intermediate storage | Ephemeral CTEs (no tables created) | $0 |
-| Mart storage | Small incremental Delta tables | Minimal |
-| Scheduling | GitHub Actions free tier | $0 |
+|-----------|---------------|------|
+| SQL Warehouse | 2X-Small (Auto Stop: 10 min) | Low / Minimal |
+| Staging | Views | No additional storage |
+| Intermediate | Ephemeral | No additional storage |
+| Marts | Incremental Delta Tables | Minimal |
+| Scheduling | GitHub Actions + Databricks Jobs | Low / Minimal |
 
-## Key Design Decisions
+---
 
-- **No Spark clusters** — SQL Warehouse only for all transformations
-- **No Python dbt models** — pure SQL throughout
-- **No DLT** — not available on Free Edition, not needed for batch SQL
-- **No Databricks Workflows** — GitHub Actions handles scheduling for free
-- **Incremental strategy** — marts process only new rows on each daily run
-- **Ephemeral intermediate** — zero storage cost for enrichment logic
-- **Schema routing macro** — dev and prod schemas never collide
+# Key Design Decisions
+
+- SQL Warehouse only (no Spark clusters)
+- Pure SQL dbt models
+- No Delta Live Tables
+- GitHub Actions triggers Databricks Jobs
+- dbt performs transformations only
+- Ingestion handled separately through Databricks SQL
+- Config-driven staging generation
+- Watermark-based incremental processing
+- SCD Type 2 implemented using dbt snapshots
+- Documentation maintained alongside code
+
+---
+
+# Development Workflow
+
+For development or demonstration resets:
+
+1. Clear the raw table
+2. Remove existing mart tables
+3. Upload source files in chronological order
+4. Trigger the Databricks Job
+
+For historical backfills, use the documented procedure instead of relying on a standard incremental run.
+
+---
+
+# Future Enhancements
+
+Potential improvements include:
+
+- Additional source templates
+- Generic dimension framework
+- Expanded snapshot coverage
+- More reusable data quality macros
+- Elementary integration
+- Monitoring and alerting
+- Additional mart templates
+- Metadata-driven model generation
+- Support for Auto Loader alongside `COPY INTO`
